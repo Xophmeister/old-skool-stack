@@ -23,11 +23,11 @@
     public function complain() {
       global $currentFile;
 
-      if (count($this->stack) > 0 && $currentFile != 'showErrors.php') {
+      if (count($this->stack) > 0 && $currentFile != $this->errorPage) {
         $pickled = serialize($this);
         $_SESSION['err'] = $pickled;
 
-        header('Location: '.$this->errorPage);
+        @header('Location: '.$this->errorPage);
         exit;
       }
     }
