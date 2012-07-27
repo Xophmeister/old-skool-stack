@@ -17,7 +17,7 @@
     }
 
     public function show() {
-      if is_array($this->stack) {
+      if (is_array($this->stack)) {
         return array_reverse($this->stack);
       } else {
         return false;
