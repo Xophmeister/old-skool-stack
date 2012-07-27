@@ -17,7 +17,11 @@
     }
 
     public function show() {
-      return array_reverse($this->stack);
+      if is_array($this->stack) {
+        return array_reverse($this->stack);
+      } else {
+        return false;
+      }
     }
 
     public function complain() {
