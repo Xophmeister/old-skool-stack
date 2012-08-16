@@ -47,7 +47,7 @@
             return false;
           } else {
             // Execute
-            if (!@oci_execute($stid, $autoCommit?OCI_COMMIT_ON_SUCCESS:OCI_NO_AUTO_COMMIT)) {
+            if (!@oci_execute($stid, $autoCommit?OCI_COMMIT_ON_SUCCESS:OCI_DEFAULT)) {
               $err->add('Could not execute query.');
               return false;
             } else {
@@ -78,7 +78,18 @@
       } else {
         $err->add('Cannot commit transaction; not connected.');
         return false;
-      }      
+      }  
+    }
+
+    public function rollback() {
+      global $err;
+
+      if ($this->connected) {
+        return @oci_rollback($this->connection);
+      } else {
+        $err->add('Cannot rollback transaction; not connected.');
+        return false;
+      }  
     }
   }
 ?>
