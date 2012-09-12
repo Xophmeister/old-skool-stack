@@ -2,30 +2,47 @@
   require_once "error.php";
 
   class Oracle {
-    private $connection;
-    private $connected;
+    private $errorStack;
+    private $broken = false;
 
-    function __construct($connectionString, $username, $password) {
-      global $err;
+    private $persistent;
+    private $connection = false;
 
-      if (!($this->connection = @oci_pconnect($username, $password, $connectionString))) {
-        $err->add('Cannot connect to '.$username.'@'.$connectionString);
-        $this->connected = false;
+    private function nuke($message, $resource = null) {
+      $status = 'Oracle: '.$message;
+      if ($ociErr = oci_error($resource)) $status .= '\n'.$ociErr['code'].': '.$ociErr['message'];
+
+      $this->errorStack->add($status, true);
+      $this->broken = true;
+    }
+
+    function __construct($errorStack, $connectionString, $username, $password, $persistent = true) {
+      $this->errorStack = $errorStack;
+      $this->persistent = $persistent;
+
+      if (empty($connectionString) || empty($username) || empty($password)) {
+        $this->nuke('Connection parameters not fully qualified.');
       } else {
-        $this->connected = true;
+        if ($this->persistent) {
+          $this->connection = @oci_pconnect($username, $password, $connectionString);
+        } else {
+          $this->connection = @oci_connect($username, $password, $connectionString);
+        }
+
+        if (!$this->connection) {
+          $this->nuke('Could not connect to '.$username.'@'.$connectionString);
+        }
       }
     }
 
     function __destruct() {
-      if ($this->connected) {
-        oci_close($this->connection);
+      if (!$this->broken && $this->connection && !$this->persistent) {
+        @oci_close($this->connection);
       }
     }
 
     public function execute($SQL, $parameters = null, $autoCommit = true) {
-      global $err;
-
-      if ($this->connected) {
+      if (!$this->broken && $this->connection) {
         // Parameterised queries must use bind variables; these are
         // passed as a dictionary of variable => value (n.b., no
         // reference semantics, so we can't get OUT data from stored
@@ -33,7 +50,7 @@
 
         // Prepare statement
         if (!($stid = @oci_parse($this->connection, $SQL))) {
-          $err->add('Could not prepare query.');
+          $this->nuke('Could not prepare query.', $this->connection);
           return false;
         } else {
           // Bind any parameters
@@ -43,12 +60,12 @@
               $bindSuccess = $bindSuccess && @oci_bind_by_name($stid, $key, $parameters[$key]);
 
           if (!$bindSuccess) {
-            $err->add('Could not bind parameters to query.');
+            $this->nuke('Could not bind parameters to query.', $stid);
             return false;
           } else {
             // Execute
             if (!@oci_execute($stid, $autoCommit?OCI_COMMIT_ON_SUCCESS:OCI_DEFAULT)) {
-              $err->add('Could not execute query.');
+              $this->nuke('Could not execute query.', $stid);
               return false;
             } else {
               // Get result set and return
@@ -65,29 +82,25 @@
           }
         }
       } else {
-        $err->add('Cannot execute query; not connected.');
+        $this->nuke('Cannot execute query; invalid state.');
         return false;
       }
     }
 
     public function commit() {
-      global $err;
-
-      if ($this->connected) {
+      if (!$this->broken && $this->connection) {
         return @oci_commit($this->connection);
       } else {
-        $err->add('Cannot commit transaction; not connected.');
+        $this->nuke('Cannot commit transaction; invalid state.');
         return false;
       }  
     }
 
     public function rollback() {
-      global $err;
-
-      if ($this->connected) {
+      if (!$this->broken && $this->connection) {
         return @oci_rollback($this->connection);
       } else {
-        $err->add('Cannot rollback transaction; not connected.');
+        $err->add('Cannot rollback transaction; invalid state.');
         return false;
       }  
     }
