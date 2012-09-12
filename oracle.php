@@ -1,5 +1,5 @@
 <?php
-  require_once "error.php";
+  require_once 'error.php';
 
   class Oracle {
     private $errorStack;
@@ -8,15 +8,15 @@
     private $persistent;
     private $connection = false;
 
-    private function nuke($message, $resource = null) {
+    private function nuke($message, $context = null) {
       $status = 'Oracle: '.$message;
-      if ($ociErr = oci_error($resource)) $status .= '\n'.$ociErr['code'].': '.$ociErr['message'];
+      if ($ociErr = oci_error($context)) $status .= '\n'.$ociErr['code'].': '.$ociErr['message'];
 
       $this->errorStack->add($status, true);
       $this->broken = true;
     }
 
-    function __construct($errorStack, $connectionString, $username, $password, $persistent = true) {
+    function __construct(&$errorStack, $connectionString, $username, $password, $persistent = true) {
       $this->errorStack = $errorStack;
       $this->persistent = $persistent;
 
@@ -36,17 +36,16 @@
     }
 
     function __destruct() {
-      if (!$this->broken && $this->connection && !$this->persistent) {
+      if ($this->connection && !$this->persistent) {
         @oci_close($this->connection);
       }
     }
 
-    public function execute($SQL, $parameters = null, $autoCommit = true) {
+    public function execute($SQL, &$parameters = null, $autoCommit = true) {
       if (!$this->broken && $this->connection) {
         // Parameterised queries must use bind variables; these are
-        // passed as a dictionary of variable => value (n.b., no
-        // reference semantics, so we can't get OUT data from stored
-        // procedures, etc.)
+        // passed by reference as a dictionary of variable => value. We
+        // use the reference for things like SP OUT parameters, etc.
 
         // Prepare statement
         if (!($stid = @oci_parse($this->connection, $SQL))) {
@@ -71,11 +70,11 @@
               // Get result set and return
               $records = array();
 
-              if (oci_statement_type($stid) == "SELECT" && oci_fetch_all($stid, $records, null, null, OCI_FETCHSTATEMENT_BY_ROW) !== false) {
-                oci_free_statement($stid);
+              if (@oci_statement_type($stid) == 'SELECT' && @oci_fetch_all($stid, $records, null, null, OCI_FETCHSTATEMENT_BY_ROW) !== false) {
+                @oci_free_statement($stid);
                 return $records;
               } else {
-                oci_free_statement($stid);
+                @oci_free_statement($stid);
                 return true;
               }
             }

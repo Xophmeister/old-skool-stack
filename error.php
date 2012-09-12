@@ -1,18 +1,23 @@
 <?php
+  require_once 'session.php';
+
   class ErrorStack {
     private $errorPage;
     private $stack;
+
+    private function currentPage() {
+      return end(explode('/', __FILE__));
+    }
 
     function __construct($errorPage = 'showErrors.php') {
       $this->errorPage = $errorPage;
     }
 
-    public function add($desc) {
-      global $currentFile;
-
-      if ($currentFile != $this->errorPage) {
+    public function add($desc, $fatal) {
+      if ($this->currentPage() != $this->errorPage) {
         $this->stack[] = array('timestamp'   => time(),
-                               'description' => $desc);
+                               'description' => $desc,
+                               'fatal'       => $fatal);
       }
     }
 
@@ -25,9 +30,14 @@
     }
 
     public function complain() {
-      global $currentFile;
+      $fatal = false;
 
-      if (count($this->stack) > 0 && $currentFile != $this->errorPage) {
+      if ($this->currentPage() != $this->errorPage && is_array($this->stack)) {
+        foreach ($this->stack as $err)
+          $fatal = $fatal || $err['fatal'];
+      }
+
+      if ($fatal) {
         $pickled = serialize($this);
         $_SESSION['err'] = $pickled;
 
@@ -35,13 +45,5 @@
         exit;
       }
     }
-  }
-
-  // Initialise
-  // (n.b., Needs to be within a session)
-  if (isset($_SESSION['err'])) {
-    $err = unserialize($_SESSION['err']);
-  } else {
-    $err = new ErrorStack();
   }
 ?>
