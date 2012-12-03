@@ -1,23 +1,13 @@
 <?php
-  require_once 'error.php';
-
   class Oracle {
-    private $errorStack;
+    private $session = null;
     private $broken = false;
 
     private $persistent;
     private $connection = false;
 
-    private function nuke($message, $context = null) {
-      $status = 'Oracle: '.$message;
-      if ($ociErr = oci_error($context)) $status .= '\n'.$ociErr['code'].': '.$ociErr['message'];
-
-      $this->errorStack->add($status, true);
-      $this->broken = true;
-    }
-
-    function __construct(&$errorStack, $connectionString, $username, $password, $persistent = true) {
-      $this->errorStack = $errorStack;
+    function __construct($connectionString, $username, $password, $persistent = true, &$session = null) {
+      if isset($session) $this->session = &$session;
       $this->persistent = $persistent;
 
       if (empty($connectionString) || empty($username) || empty($password)) {
@@ -41,7 +31,17 @@
       }
     }
 
-    public function execute($SQL, &$parameters = null, $autoCommit = true) {
+    private function nuke($message, $context = null) {
+      $this->broken = true;
+
+      if (isset($this->session)) {
+        $status = 'Oracle: '.$message;
+        if ($ociErr = @oci_error($context)) $status .= ' ('.$ociErr['message'].')';
+        $this->session->log($status, true);
+      }
+    }
+
+    public function exec($SQL, &$parameters = null, $autoCommit = true) {
       if (!$this->broken && $this->connection) {
         // Parameterised queries must use bind variables; these are
         // passed by reference as a dictionary of variable => value. We
@@ -54,16 +54,18 @@
         } else {
           // Bind any parameters
           $bindSuccess = true;
-          if (count($parameters) > 0)
-            foreach ($parameters as $key => $val)
-              $bindSuccess = $bindSuccess && @oci_bind_by_name($stid, $key, $parameters[$key]);
+          if (count($parameters) > 0) {
+            foreach ($parameters as $key => $val) {
+              $bindSuccess = $bindSuccess && @oci_bind_by_name($stid, $key, $parameters[$key], 32767);
+            }
+          }
 
           if (!$bindSuccess) {
             $this->nuke('Could not bind parameters to query.', $stid);
             return false;
           } else {
             // Execute
-            if (!@oci_execute($stid, $autoCommit?OCI_COMMIT_ON_SUCCESS:OCI_DEFAULT)) {
+            if (!@oci_execute($stid, $autoCommit ? OCI_COMMIT_ON_SUCCESS : OCI_DEFAULT)) {
               $this->nuke('Could not execute query.', $stid);
               return false;
             } else {

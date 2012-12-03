@@ -1,29 +1,26 @@
 <?php
-  require_once 'error.php';
-
   class LDAP {
-    private $errorStack;
+    private $session = null;
     private $broken = false;
 
     private $connection = false;
     private $dn;
 
-    private function nuke($message) {
-      $this->errorStack->add('LDAP: '.$message, true);
-      $this->broken = true;
-    }
+    function __construct($hostname, $dn, &$session = null) {
+      if (isset($session)) $this->session = &$session;
 
-    function __construct(&$errorStack, $hostname, $dn, $port = 389) {
-      $this->errorStack = $errorStack;
-
-      if (empty($hostname) || empty($dn) || empty($port)) {
-        $this->nuke('Connection parameters not fully qualified.');
-      } else {
-        if (!($this->connection = @ldap_connect($hostname, $port))) {
-          $this->nuke('Cannot connect to '.$hostname.':'.$port);
+      $match = array()
+      if (preg_match('/^(?<hostname>[^:]+)(:(?<port>\d+)$)?/', $hostname, $match) && isset($dn)) {
+        $host = $match['hostname'];
+        $port = isset($match['port']) ? $match['port'] : 389; 
+      
+        if (!($this->connection = @ldap_connect($host, $port))) {
+          $this->nuke('Cannot connect to '.$hostname);
         } else {
           $this->dn = $dn;
         }
+      } else {
+        $this->nuke('Connection parameters not fully qualified.');
       }
     }
 
@@ -31,6 +28,11 @@
       if ($this->connection) {
         @ldap_close($this->connection);
       }
+    }
+
+    private function nuke($message) {
+      $this->broken = true;
+      if (isset($this->session)) $this->session->log('LDAP: '.$message, true);
     }
 
     public function get($filter) {
