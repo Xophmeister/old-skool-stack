@@ -17,14 +17,11 @@
     function __destruct() {
       $this->json['meta']['t'] = microtime(true) - $this->requestStart;
 
-      if (isset($this->session)) {
-        $errors = $this->session->trace();
-
-        if (is_array($errors)) {
-          $this->json['payload'] = $errors;
-        } else {
-          $this->json['meta']['ok'] = true;
-        }
+      $errors = isset($this->session) ? $this->session->trace() : null;
+      if (is_array($errors)) {
+        $this->json['payload'] = $errors;
+      } else {
+        $this->json['meta']['ok'] = true;
       }
 
       // Output
