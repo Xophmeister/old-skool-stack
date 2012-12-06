@@ -1,14 +1,15 @@
 <?php
-  class LDAP {
-    private $session = null;
+  require_once 'app.php';
+
+  class LDAP extends Plugin {
     private $broken = false;
 
     private $connection = false;
     private $dn;
 
-    function __construct($hostname, $dn, &$session = null) {
-      if (isset($session)) $this->session = &$session;
+    // De/Constructors /////////////////////////////////////////////////
 
+    function __construct($hostname, $dn) {
       $match = array()
       if (preg_match('/^(?<hostname>[^:]+)(:(?<port>\d+)$)?/', $hostname, $match) && isset($dn)) {
         $host = $match['hostname'];
@@ -30,10 +31,14 @@
       }
     }
 
+    // Error Handling //////////////////////////////////////////////////
+
     private function nuke($message) {
       $this->broken = true;
-      if (isset($this->session)) $this->session->log('LDAP: '.$message, true);
+      if (isset($this->app)) $this->app->log('LDAP: '.$message);
     }
+
+    // This is where the magic happens /////////////////////////////////
 
     public function get($filter) {
       if (!$this->broken && $this->connection) {

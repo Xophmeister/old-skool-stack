@@ -1,13 +1,15 @@
 <?php
-  class Oracle {
-    private $session = null;
+  require_once 'app.php';
+
+  class Oracle extends Plugin {
     private $broken = false;
 
     private $persistent;
     private $connection = false;
 
-    function __construct($connectionString, $username, $password, $persistent = true, &$session = null) {
-      if isset($session) $this->session = &$session;
+    // Con/Destructors /////////////////////////////////////////////////
+
+    function __construct($connectionString, $username, $password, $persistent = true) {
       $this->persistent = $persistent;
 
       if (empty($connectionString) || empty($username) || empty($password)) {
@@ -31,15 +33,19 @@
       }
     }
 
+    // Error Handling //////////////////////////////////////////////////
+
     private function nuke($message, $context = null) {
       $this->broken = true;
 
-      if (isset($this->session)) {
+      if (isset($this->app)) {
         $status = 'Oracle: '.$message;
         if ($ociErr = @oci_error($context)) $status .= ' ('.$ociErr['message'].')';
-        $this->session->log($status, true);
+        $this->app->log($status);
       }
     }
+
+    // This is where the magic happens /////////////////////////////////
 
     public function exec($SQL, &$parameters = null, $autoCommit = true) {
       if (!$this->broken && $this->connection) {
@@ -88,22 +94,18 @@
       }
     }
 
-    public function commit() {
+    // Commit or rollback a transaction, if necessary
+    public function finish($commit = true) {
       if (!$this->broken && $this->connection) {
-        return @oci_commit($this->connection);
+        if ($commit) {
+          return @oci_commit($this->connection);
+        } else {
+          return @oci_rollback($this->connection);
+        }
       } else {
-        $this->nuke('Cannot commit transaction; invalid state.');
+        $this->nuke('Cannot manage transaction; invalid state.');
         return false;
-      }  
-    }
-
-    public function rollback() {
-      if (!$this->broken && $this->connection) {
-        return @oci_rollback($this->connection);
-      } else {
-        $err->add('Cannot rollback transaction; invalid state.');
-        return false;
-      }  
+      }
     }
   }
 ?>
